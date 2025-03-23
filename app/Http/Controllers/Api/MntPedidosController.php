@@ -46,6 +46,11 @@ class MntPedidosController extends Controller
                     $detalleItem->makeHidden(['created_at', 'updated_at']);
                     $detalleItem->producto->makeHidden(['created_at', 'updated_at', 'activo']);
                 });
+                // Agregar el número total de ítems en el pedido
+                $orden->total_items = $orden->detallePedido->sum('cantidad');
+
+                // Número de productos distintos (nuevo)
+                $orden->unique_products = $orden->detallePedido->pluck('producto_id')->unique()->count();
             });
 
             return ApiResponse::success('Órdenes', 200, $ordenes);
@@ -60,10 +65,10 @@ class MntPedidosController extends Controller
     public function guardarPedido(Request $solicitud)
     {
         // Validación de la solicitud
-        $validador = Validator::make($solicitud->all(), [
+        $solicitud->validate([
             "fecha_pedido" => "required|date",
-            "client_id" => "required|exists:mnt_clientes,id", // Cliente debe existir en la BD
-            "detalle" => "required|array|min:1", // Debe haber al menos un producto en el pedido
+            "client_id" => "required|exists:mnt_clientes,id",
+            "detalle" => "required|array|min:1",
             "detalle.*.product_id" => "required|exists:ctl_productos,id",
             "detalle.*.precio" => "required|numeric|min:0",
             "detalle.*.cantidad" => "required|numeric|min:1",
@@ -80,11 +85,6 @@ class MntPedidosController extends Controller
             "detalle.*.precio.required" => "El precio es obligatorio",
             "detalle.*.precio.numeric" => "El precio debe ser un número"
         ]);
-
-        // Si la validación falla, se devuelve un error
-        if ($validador->fails()) {
-            return response()->json(["errors" => $validador->errors()], 422);
-        }
 
         try {
             DB::beginTransaction(); // Iniciar transacción para evitar inconsistencias en la BD
